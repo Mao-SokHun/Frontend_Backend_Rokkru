@@ -1,9 +1,13 @@
-# Use your real backend DB (same as local dev):
-#   docker compose --env-file .env.docker up --build
-# The backend loads backend_rokkru/.env automatically when present.
+# First time on a new machine ( .env.docker is not in git ):
+#   cp .env.docker.example .env.docker
 #
-# Use bundled Postgres instead (empty DB — needs local-db seed):
-#   docker compose --env-file .env.docker --profile local-db up --build
+# Start (uses backend_rokkru/.env for DATABASE_URL, JWT, Stripe, etc.):
+#   docker compose up --build
+# Or explicitly:
+#   docker compose --env-file .env.docker up --build
+#
+# Bundled Postgres instead of Neon (add --profile local-db):
+#   docker compose --profile local-db up --build
 
 services:
   db:
@@ -68,7 +72,7 @@ services:
         for name in Student Teacher Admin; do
           curl -sf -X POST "http://backend:3000/api/v1/user-types" \
             -H "Content-Type: application/json" \
-            -d "{\"user_type_name\":\"$name\"}" || true
+            -d "{\"user_type_name\":\"$$name\"}" || true
         done
         echo "User types:"
         curl -sf "http://backend:3000/api/v1/user-types"
