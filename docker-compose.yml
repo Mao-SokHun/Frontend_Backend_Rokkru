@@ -2,8 +2,7 @@
 #
 # Start with bundled PostgreSQL:
 #   docker compose up --build
-# First-time only — seed user types (Student, Teacher, Admin):
-#   docker compose --profile seed up db-seed
+# User types (Student, Teacher, Admin) are auto-seeded on backend startup.
 #
 # .env.docker overrides backend_rokkru/.env for DATABASE_URL (so Docker uses Postgres, not cloud DB).
 
@@ -54,24 +53,6 @@ services:
       timeout: 5s
       retries: 10
       start_period: 45s
-
-  db-seed:
-    profiles: [seed]
-    image: curlimages/curl:8.5.0
-    depends_on:
-      backend:
-        condition: service_healthy
-    restart: "no"
-    entrypoint: ["/bin/sh", "-ec"]
-    command:
-      - |
-        for name in Student Teacher Admin; do
-          curl -sf -X POST "http://backend:3000/api/v1/user-types" \
-            -H "Content-Type: application/json" \
-            -d "{\"user_type_name\":\"$$name\"}" || true
-        done
-        echo "User types:"
-        curl -sf "http://backend:3000/api/v1/user-types"
 
   frontend:
     build:

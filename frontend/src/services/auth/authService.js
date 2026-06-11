@@ -72,7 +72,10 @@ function persistSession(user, token = COOKIE_SESSION_TOKEN) {
 
 async function resolveUserTypeId(role = 'student') {
   if (!userTypesCache) {
-    const raw = await apiRequest(ENDPOINTS.userTypes.list, { auth: false })
+    const raw = await apiRequest(ENDPOINTS.userTypes.list, {
+      auth: false,
+      cache: 'no-store',
+    })
     userTypesCache = Array.isArray(raw) ? raw : raw?.data ?? []
   }
   const wanted = role.toLowerCase()
