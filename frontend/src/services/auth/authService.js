@@ -70,24 +70,38 @@ function persistSession(user, token = COOKIE_SESSION_TOKEN) {
   return user
 }
 
-async function resolveUserTypeId(role = 'student') {
-  if (!userTypesCache) {
-    const raw = await apiRequest(ENDPOINTS.userTypes.list, {
-      auth: false,
-      cache: 'no-store',
-    })
-    userTypesCache = Array.isArray(raw) ? raw : raw?.data ?? []
-  }
+async function fetchUserTypes() {
+  const raw = await apiRequest(ENDPOINTS.userTypes.list, {
+    auth: false,
+    cache: 'no-store',
+  })
+  return Array.isArray(raw) ? raw : raw?.data ?? []
+}
+
+function findUserTypeId(types, role) {
   const wanted = role.toLowerCase()
-  const match = userTypesCache.find((type) => {
+  const match = types.find((type) => {
     const name = String(type.user_type_name ?? '').toLowerCase()
     if (wanted === 'mentor') return name === 'teacher' || name === 'mentor'
     return name === wanted
   })
-  if (!match) {
-    throw new Error(`Account type "${role}" is not configured on the server`)
+  return match?.user_type_id ?? null
+}
+
+async function resolveUserTypeId(role = 'student') {
+  if (!userTypesCache) {
+    userTypesCache = await fetchUserTypes()
   }
-  return match.user_type_id
+
+  let userTypeId = findUserTypeId(userTypesCache, role)
+  if (userTypeId != null) return userTypeId
+
+  // Retry once — backend may have just seeded types on startup
+  userTypesCache = await fetchUserTypes()
+  userTypeId = findUserTypeId(userTypesCache, role)
+  if (userTypeId != null) return userTypeId
+
+  throw new Error(`Account type "${role}" is not configured on the server`)
 }
 
 /**

@@ -4,7 +4,7 @@ import helmet from 'helmet';
 import morgan from 'morgan';
 import cookieParser from 'cookie-parser';
 import dotenv from 'dotenv';
-import { sequelize } from './models/index.js';
+import { sequelize, UserType } from './models/index.js';
 import setupSwagger from './config/swagger.js';
 import mentorRoutes from './routes/v1/mentor/mentors.js';
 import { stripeWebhook } from './controllers/stripe/stripeWebhook.js';
@@ -83,6 +83,20 @@ app.post(
   express.raw({ type: 'application/json' }),
   stripeWebhook,
 );
+async function ensureDefaultUserTypes() {
+  const defaults = ['Student', 'Teacher', 'Admin'];
+  const existing = await UserType.findAll();
+  const names = new Set(
+    existing.map((row) => String(row.user_type_name || '').toLowerCase()),
+  );
+
+  for (const name of defaults) {
+    if (names.has(name.toLowerCase())) continue;
+    await UserType.create({ user_type_name: name });
+    console.log(`✅ Seeded user type: ${name}`);
+  }
+}
+
 // Connect to Database and start server
 async function startServer() {
   try {
@@ -93,6 +107,8 @@ async function startServer() {
     console.log('Synchronizing database models (creating tables)...');
     await sequelize.sync({ alter: true });
     console.log('✅ Database tables synchronized successfully.');
+
+    await ensureDefaultUserTypes();
 
     app.listen(PORT, () => {
       console.log(`🚀 Server is running on port ${PORT}`);
