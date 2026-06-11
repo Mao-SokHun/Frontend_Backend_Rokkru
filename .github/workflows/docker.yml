@@ -26,7 +26,7 @@ jobs:
           EOF
 
       - name: Build and start stack
-        run: docker compose --env-file .env.docker --profile local-db up -d --build --wait
+        run: docker compose --env-file .env.docker up -d --build --wait
 
       - name: Smoke test backend health
         run: |
@@ -38,4 +38,4 @@ jobs:
 
       - name: Tear down
         if: always()
-        run: docker compose --env-file .env.docker --profile local-db down -v
+        run: docker compose --env-file .env.docker down -v

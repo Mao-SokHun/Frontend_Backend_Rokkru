@@ -1,17 +1,12 @@
-# First time on a new machine ( .env.docker is not in git ):
-#   cp .env.docker.example .env.docker
+# First time: cp .env.docker.example .env.docker
 #
-# Start (uses backend_rokkru/.env for DATABASE_URL, JWT, Stripe, etc.):
+# Start with bundled PostgreSQL:
 #   docker compose up --build
-# Or explicitly:
-#   docker compose --env-file .env.docker up --build
 #
-# Bundled Postgres instead of Neon (add --profile local-db):
-#   docker compose --profile local-db up --build
+# .env.docker overrides backend_rokkru/.env for DATABASE_URL (so Docker uses Postgres, not cloud DB).
 
 services:
   db:
-    profiles: [local-db]
     image: postgres:16-alpine
     restart: unless-stopped
     environment:
@@ -37,9 +32,9 @@ services:
     ports:
       - "${BACKEND_PORT:-3000}:3000"
     env_file:
-      - path: .env.docker
-        required: false
       - path: backend_rokkru/.env
+        required: false
+      - path: .env.docker
         required: false
     environment:
       NODE_ENV: production
@@ -51,7 +46,6 @@ services:
     depends_on:
       db:
         condition: service_healthy
-        required: false
     healthcheck:
       test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:3000/health').then((r)=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
       interval: 10s
@@ -60,7 +54,6 @@ services:
       start_period: 45s
 
   db-seed:
-    profiles: [local-db]
     image: curlimages/curl:8.5.0
     depends_on:
       backend:
