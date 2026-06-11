@@ -1,65 +1,8 @@
 import stripe from '../../config/stripe.js';
-import Subscription from '../../models/subscriptionModel.js';
 import SubscriptionPlan from '../../models/subscriptionPlanModel.js';
 import StripePayment from '../../models/stripePaymentModel.js';
-import TransactionDetail from '../../models/transactionDetailModel.js';
 import User from '../../models/userModel.js';
-import { toStripeAmount, fromStripeAmount } from '../../utils/stripe/stripeAmounts.js';
-import { activateSubscription } from '../../utils/stripe/subscriptionHelper.js';
-
-function toIsoDate(value) {
-  if (!value) return null;
-  const date = value instanceof Date ? value : new Date(value);
-  return Number.isNaN(date.getTime()) ? null : date.toISOString().slice(0, 10);
-}
-
-function formatSubscriptionForClient(subscription, plan) {
-  if (!subscription || !plan || Number(plan.price) <= 0) {
-    return {
-      plan: 'free',
-      status: null,
-      billingInterval: 'monthly',
-      subscribedAt: null,
-      billingAnchorDay: null,
-      currentPeriodStart: null,
-      currentPeriodEnd: null,
-      nextBilling: null,
-      cancelAtPeriodEnd: false,
-      canceledAt: null,
-      cardLast4: null,
-      paymentFailures: 0,
-      lastPaymentFailedAt: null,
-      gracePeriodEndsAt: null,
-      scheduledChange: null,
-      trialEndsAt: null,
-      invoices: [],
-    };
-  }
-
-  const startDate = subscription.start_date ? new Date(subscription.start_date) : new Date();
-  const endDate = subscription.end_date ? new Date(subscription.end_date) : null;
-  const isActive = !endDate || endDate > new Date();
-
-  return {
-    plan: isActive ? 'premium' : 'free',
-    status: isActive ? 'active' : 'canceled',
-    billingInterval: 'monthly',
-    subscribedAt: startDate.toISOString(),
-    billingAnchorDay: startDate.getDate(),
-    currentPeriodStart: toIsoDate(startDate),
-    currentPeriodEnd: toIsoDate(endDate),
-    nextBilling: toIsoDate(endDate),
-    cancelAtPeriodEnd: false,
-    canceledAt: isActive ? null : toIsoDate(endDate),
-    cardLast4: null,
-    paymentFailures: 0,
-    lastPaymentFailedAt: null,
-    gracePeriodEndsAt: null,
-    scheduledChange: null,
-    trialEndsAt: null,
-    invoices: [],
-  };
-}
+import { toStripeAmount } from '../../utils/stripe/stripeAmounts.js';
 
 function requireStripe(res) {
   if (!stripe) {
@@ -173,73 +116,17 @@ export const createCheckoutSession = async (req, res) => {
 
 export const listSubscriptionPlans = async (req, res) => {
   try {
-    let plans = await SubscriptionPlan.findAll({
+    const plans = await SubscriptionPlan.findAll({
       attributes: [
         'subscription_Plan_id',
         'name',
         'price',
         'duration_day',
         'description',
+        'stripe_price_id',
       ],
-      order: [['price', 'ASC']],
     });
-
-    if (!plans.some((plan) => Number(plan.price) > 0)) {
-      const [premiumPlan] = await SubscriptionPlan.findOrCreate({
-        where: { name: 'Premium Monthly' },
-        defaults: {
-          admin_id: 1,
-          name: 'Premium Monthly',
-          price: 29,
-          description: 'Mentor premium — monthly',
-        },
-      });
-      plans = [...plans, premiumPlan];
-    }
-
     return res.json(plans);
-  } catch (error) {
-    return res.status(500).json({ message: error.message });
-  }
-};
-
-export const getMySubscription = async (req, res) => {
-  try {
-    const userId = req.user.user_id;
-    const subscription = await Subscription.findOne({
-      where: { user_id: userId },
-      include: [{ model: SubscriptionPlan }],
-      order: [['subscription_id', 'DESC']],
-    });
-
-    const transactions = subscription
-      ? await TransactionDetail.findAll({
-          where: {
-            user_id: userId,
-            subscription_id: subscription.subscription_id,
-          },
-          order: [['payment_id', 'DESC']],
-          limit: 20,
-        })
-      : [];
-
-    const payload = formatSubscriptionForClient(
-      subscription,
-      subscription?.SubscriptionPlan,
-    );
-
-    payload.invoices = transactions.map((tx) => ({
-      id: `INV-${tx.payment_id}`,
-      date: toIsoDate(new Date()),
-      description: tx.remark || 'Premium subscription payment',
-      amount: 0,
-      status: 'paid',
-      periodStart: toIsoDate(subscription?.start_date),
-      periodEnd: toIsoDate(subscription?.end_date),
-      billingInterval: 'monthly',
-    }));
-
-    return res.json({ success: true, data: payload });
   } catch (error) {
     return res.status(500).json({ message: error.message });
   }
@@ -259,50 +146,6 @@ export const getCheckoutSession = async (req, res) => {
 
     if (!payment || payment.user_id !== userId) {
       return res.status(404).json({ message: 'Checkout session not found' });
-    }
-
-    if (session.payment_status === 'paid' && payment.status !== 'completed') {
-      const subscriptionPlanId = Number(session.metadata?.subscription_plan_id);
-      const userTypeId = session.metadata?.user_type_id
-        ? Number(session.metadata.user_type_id)
-        : null;
-
-      if (subscriptionPlanId) {
-        const subscription = await activateSubscription({
-          userId,
-          subscriptionPlanId,
-          userTypeId,
-        });
-
-        payment.subscription_id = subscription.subscription_id;
-        payment.stripe_payment_intent_id =
-          typeof session.payment_intent === 'string'
-            ? session.payment_intent
-            : session.payment_intent?.id;
-        payment.amount = fromStripeAmount(session.amount_total, session.currency);
-        payment.currency = session.currency || payment.currency;
-        payment.status = 'completed';
-        payment.update_date = new Date();
-        await payment.save();
-
-        const existingTx = await TransactionDetail.findOne({
-          where: {
-            user_id: userId,
-            subscription_id: subscription.subscription_id,
-            bank_tx_id: payment.stripe_payment_intent_id,
-          },
-        });
-
-        if (!existingTx) {
-          await TransactionDetail.create({
-            user_id: userId,
-            subscription_id: subscription.subscription_id,
-            bank_tx_id: payment.stripe_payment_intent_id,
-            remark: `Stripe checkout ${session.id}`,
-            paid_account: session.customer_details?.email || null,
-          });
-        }
-      }
     }
 
     return res.json({

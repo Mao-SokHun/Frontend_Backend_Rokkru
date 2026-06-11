@@ -3,7 +3,6 @@ import { protect } from '../../middleware/auth/auth.js';
 import {
   createCheckoutSession,
   getCheckoutSession,
-  getMySubscription,
   getStripeConfig,
   listSubscriptionPlans,
 } from '../../controllers/stripe/stripeController.js';
@@ -33,8 +32,6 @@ router.get('/config', getStripeConfig);
  *         description: List of subscription plans
  */
 router.get('/plans', listSubscriptionPlans);
-
-router.get('/subscription/current', protect, getMySubscription);
 
 /**
  * @swagger

@@ -62,14 +62,18 @@ app.get('/health', async (req, res) => {
     });
   }
 });
-
+app.post(
+  '/api/v1/stripe/webhook',
+  express.raw({ type: 'application/json' }),
+  stripeWebhook,
+);
 // API Routes
 app.use('/api/v1/user-types', userTypesRouter);
 // Mentor routes
 app.use('/api/v1/', mentorRoutes);
 // Auth
 app.use('/api/v1/auth', authRoutes);
-// Stripe routes
+// Stripe payments
 app.use('/api/v1/stripe', stripeRoutes);
 
 app.post(
