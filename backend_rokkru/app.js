@@ -22,8 +22,13 @@ setupSwagger(app);
 
 // Standard Security & Utility Middlewares
 app.use(helmet());
+const corsOrigins = (process.env.CORS_ORIGIN || 'http://localhost:5173')
+  .split(',')
+  .map((origin) => origin.trim())
+  .filter(Boolean);
+
 app.use(cors({
-  origin: 'http://localhost:5173', // Adjust to specific frontend domains if necessary
+  origin: corsOrigins,
   credentials: true,
 }));
 app.use(morgan('dev'));

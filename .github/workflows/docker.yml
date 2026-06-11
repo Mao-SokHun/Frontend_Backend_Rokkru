@@ -1,0 +1,32 @@
+name: Docker CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  docker:
+    runs-on: ubuntu-latest
+    # For a self-hosted runner with Docker installed, use:
+    # runs-on: [self-hosted, linux, docker]
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Build and start stack
+        run: docker compose up -d --build --wait
+
+      - name: Smoke test backend health
+        run: |
+          curl -fsS http://localhost:3000/health
+          curl -fsS http://localhost:3000/health | grep -q '"status":"UP"'
+
+      - name: Smoke test frontend
+        run: curl -fsS -o /dev/null -w "%{http_code}\n" http://localhost/ | grep -q 200
+
+      - name: Tear down
+        if: always()
+        run: docker compose down -v
