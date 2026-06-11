@@ -76,6 +76,8 @@ app.use('/api/v1/auth', authRoutes);
 // Stripe payments
 app.use('/api/v1/stripe', stripeRoutes);
 
+
+
 app.post(
   '/api/v1/stripe/webhook',
   express.raw({ type: 'application/json' }),
