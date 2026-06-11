@@ -16,8 +16,17 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
+      - name: Prepare CI env
+        run: |
+          cat >> .env.docker <<'EOF'
+          DATABASE_URL=postgres://rokkru:rokkru@db:5432/rokkru
+          DB_SSL=false
+          JWT_SECRET=ci-jwt-secret
+          JWT_REFRESH_SECRET=ci-jwt-refresh-secret
+          EOF
+
       - name: Build and start stack
-        run: docker compose up -d --build --wait
+        run: docker compose --env-file .env.docker --profile local-db up -d --build --wait
 
       - name: Smoke test backend health
         run: |
@@ -29,4 +38,4 @@ jobs:
 
       - name: Tear down
         if: always()
-        run: docker compose down -v
+        run: docker compose --env-file .env.docker --profile local-db down -v
